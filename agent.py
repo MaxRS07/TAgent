@@ -3,6 +3,8 @@ import struct
 from model import init_model
 import logging
 import select
+import torch
+import numpy
 
 class Byterator():
     def __init__(self, bytes: bytes) -> None:
@@ -36,8 +38,9 @@ class Byterator():
 
 class AgentInfo():
     def __init__(self, bytes = Byterator) -> None:
-        self.observations = bytes.next_byte()
-        self.actions = bytes.next_byte()
+        i = struct.unpack('<ii', bytes.bytes)
+        self.observations = i[0]
+        self.actions = i[1]
 class AgentPacket():
     def __init__(self, packet: Byterator, vector_size: int) -> None:
         self.last_reward = packet.next_float()
@@ -61,47 +64,62 @@ class Agent():
             while self.open:
                 self.client_socket, client_address = server_socket.accept()
                 while True:
-                    ready, _, _ = select.select([self.client_socket], [], [], 1)
-                    if ready:
+                    ready, _, _ = select.select([self.client_socket], [], [], 1)       
+                    if ready and self.client_socket != None:
+                        data = self.client_socket.recv(1024)
                         if self.observations == None:
-                            info = self.info_packet()
+                            info = self.parse_info(data)
                             if info != None:
                                 self.observations = info.observations
                                 self.actions = info.actions
                                 self.model = init_model(self.observations, self.actions)
+                                print(self.actions)
+                                print(self.observations)
                         else:
-                            packet = self.read_packet()
+                            c = self.parse_command(data)
+                            if c == 0:
+                                return
+                            packet = self.parse_packet(data)
                             if packet != None:
-                                #output = self.model(packet.input_vector)
-                                print(packet.last_reward)
+                                iv = numpy.array(packet.input_vector, dtype=float)
+                                t = torch.from_numpy(iv).float()
+                                actions = self.model(t)
+                                if actions != None:
+                                    b = [struct.pack('f', a.item()) for a in actions.detach()]
+                                    self.client_socket.send(b)
                     else:
                         pass
-                    
-    def read_packet(self) -> AgentPacket | None:
-        if self.client_socket != None:
-            packet_size = 4 + self.observations * 4
-            data = self.client_socket.recv(packet_size)
-            if not data or len(data) != packet_size:
-                return
-            data = Byterator(data)
-            return AgentPacket(data, self.observations)
-        else:
-            print("No active clients")
+    def parse_command(self, data: bytes) -> int | None:
+        packet_size = 4
+        if not data or len(data) != packet_size:
+           return
+        command = ""
+        try:
+            command = data.decode('utf-8')
+        except:
             return
-    def info_packet(self) -> AgentInfo | None:
-        if self.client_socket != None:
-            data = self.client_socket.recv(2)
-            if not data or len(data) != 2:
-                return
-            data = Byterator(data)
-            return AgentInfo(data)
-        else:
-            print("No active clients")
-            return    
+        match command:
+            case "stop":
+                print("server closed")
+                self.close_server()
+                return 0
+    def parse_packet(self, data: bytes) -> AgentPacket | None:
+        packet_size = 4 + self.observations * 4
+        if not data or len(data) != packet_size:
+            return
+        data = Byterator(data)
+        return AgentPacket(data, self.observations)
+    
+    def parse_info(self, data: bytes) -> AgentInfo | None:
+        if not data or len(data) != 8:
+            return
+        data = Byterator(data)
+        return AgentInfo(data)
     def close_server(self):
         self.model.save()
-        self.socket = None
         self.open = False
+        if self.client_socket:
+            self.client_socket.close()
         
 if __name__ == '__main__':
     a = Agent()

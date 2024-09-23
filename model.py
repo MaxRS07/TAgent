@@ -35,3 +35,10 @@ def init_model(observations: int, actions: int) -> PolicyGradientNN:
     
 
     return model
+
+if __name__ == '__main__':
+    model = init_model(1, 2)
+    input = torch.randn(1, 1)
+    out = model(input)
+    
+    print(out)
