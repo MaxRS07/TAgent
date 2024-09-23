@@ -10,6 +10,7 @@ class PolicyGradientNN(nn.Module):
         self.fc1 = nn.Linear(inputs, 64)
         self.fc2 = nn.Linear(64, 32)
         self.fc3 = nn.Linear(32, outputs)
+        self.old = None
 
     def forward(self, x):
         x = torch.relu(self.fc1(x))

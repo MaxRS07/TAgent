@@ -73,20 +73,24 @@ class Agent():
                                 self.observations = info.observations
                                 self.actions = info.actions
                                 self.model = init_model(self.observations, self.actions)
-                                print(self.actions)
-                                print(self.observations)
                         else:
                             c = self.parse_command(data)
                             if c == 0:
                                 return
                             packet = self.parse_packet(data)
                             if packet != None:
+                                if self.model.old != None:
+                                    r = packet.last_reward
+                                    self.model.refit(r, self.model.old)
+                                
+                                self.model.old = torch.FloatTensor(packet.input_vector)
+                                
                                 iv = numpy.array(packet.input_vector, dtype=float)
                                 t = torch.from_numpy(iv).float()
                                 actions = self.model(t)
                                 if actions != None:
-                                    b = [struct.pack('f', a.item()) for a in actions.detach()]
-                                    self.client_socket.send(b)
+                                    b = b''.join(struct.pack('f', a) for a in actions)
+                                    self.client_socket.send(bytes(b))
                     else:
                         pass
     def parse_command(self, data: bytes) -> int | None:
