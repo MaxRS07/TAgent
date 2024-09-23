@@ -40,16 +40,18 @@ class AgentInfo():
     def __init__(self, bytes = Byterator) -> None:
         i = struct.unpack('<ii', bytes.bytes)
         self.observations = i[0]
-        self.actions = i[1]
+        self.discrete = i[1]
+        self.continuous = i[2]
 class AgentPacket():
-    def __init__(self, packet: Byterator, vector_size: int) -> None:
+    def __init__(self, packet: Byterator, nd: int, nc: int) -> None:
         self.last_reward = packet.next_float()
-        self.input_vector = packet.next_floats(vector_size)
-
+        self.d_input_vector = packet.next_floats(nd)
+        self.c_input_vector = packet.next_floats(nc)
 class Agent():
     def __init__(self, host: str = '127.0.0.1', port: int = 65432) -> None:
         self.observations = None
-        self.actions = None
+        self.discrete = None
+        self.continuous = None
         self.addr = (host, port)
         self.client_socket = None
         self.open = False
@@ -71,11 +73,12 @@ class Agent():
                             info = self.parse_info(data)
                             if info != None:
                                 self.observations = info.observations
-                                self.actions = info.actions
-                                self.model = init_model(self.observations, self.actions)
+                                self.discrete = info.discrete
+                                self.continuous = info.continuous
+                                self.model = init_model(self.observations, self.discrete, self.continuous)
                         else:
                             c = self.parse_command(data)
-                            if c == 0:
+                            if c == None:
                                 return
                             packet = self.parse_packet(data)
                             if packet != None:
@@ -93,7 +96,7 @@ class Agent():
                                     self.client_socket.send(bytes(b))
                     else:
                         pass
-    def parse_command(self, data: bytes) -> int | None:
+    def parse_command(self, data: bytes) -> None:
         packet_size = 4
         if not data or len(data) != packet_size:
            return
@@ -106,16 +109,16 @@ class Agent():
             case "stop":
                 print("server closed")
                 self.close_server()
-                return 0
+                return
     def parse_packet(self, data: bytes) -> AgentPacket | None:
-        packet_size = 4 + self.observations * 4
+        packet_size = 4 + (self.discrete + self.continuous) * 4
         if not data or len(data) != packet_size:
             return
         data = Byterator(data)
-        return AgentPacket(data, self.observations)
+        return AgentPacket(data, self.ac)
     
     def parse_info(self, data: bytes) -> AgentInfo | None:
-        if not data or len(data) != 8:
+        if not data or len(data) != 12:
             return
         data = Byterator(data)
         return AgentInfo(data)
