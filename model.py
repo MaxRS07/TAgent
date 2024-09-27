@@ -16,7 +16,7 @@ class PolicyGradientNN(nn.Module):
         x = torch.relu(self.fc1(x))
         x = torch.relu(self.fc2(x))
         x = self.fc3(x)
-        return F.softmax(x, dim=-1)
+        return F.sigmoid(x)
     def refit(self, reward: float, old_vector: list[float]):
         optimizer = optim.Adam(self.parameters(), lr=0.01)
         output_probs = self(old_vector)
@@ -31,14 +31,14 @@ class PolicyGradientNN(nn.Module):
     def save(self):
         torch.save(self.state_dict(), "model_state.pth")
 
-def init_model(observations: int, actions: int) -> PolicyGradientNN:
-    model = PolicyGradientNN(observations, actions)
+def init_model(observations: int, continuous: int) -> PolicyGradientNN:
+    model = PolicyGradientNN(observations, continuous)
     
 
     return model
 
 if __name__ == '__main__':
-    model = init_model(1, 2)
+    model = init_model(1, 20, 0)
     input = torch.randn(1, 1)
     out = model(input)
     

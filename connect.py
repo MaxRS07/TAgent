@@ -7,11 +7,8 @@ def connect_to_server(host, port):
             print(f"Connected to {host}:{port}")
             
             message = "Hello, Server!"
-            s.sendall(message.encode())
+            s.send(message.encode())
             print("Message sent to the server.")
-            
-            response = s.recv(1024)
-            print("Received from server:", response.decode())
     
     except Exception as e:
         print("Error:", e)
